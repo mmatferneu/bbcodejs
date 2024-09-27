@@ -355,440 +355,636 @@ class VideoPlayer
 	}
 }
 
- // Javascript BBCode Parser
- // @author Philip Nicolcev
- // @author Ferneu
- // @license MIT License
 
+class BBCode
+{
+	static DetailsOnToggle(details)
+	{
+		// pre-load videos and images when the details tag is opened.
+		// Unload them when it is closed
+		if(details.open)
+		{
+			// get only videos that are direct children of this details tag.
+			// ignororing the ones that might be inside inner details tag
+			// because those should only be loaded when their parent tag
+			// is opened/expanded
+			var videoContainers = details.querySelectorAll(':scope > .bbVideo_container');
 
- function DetailsOnToggle(details)
- {
- 	// pre-load videos and images when the details tag is opened.
- 	// Unload them when it is closed
- 	if(details.open)
- 	{
- 		// get only videos that are direct children of this details tag.
- 		// ignororing the ones that might be inside inner details tag
- 		// because those should only be loaded when their parent tag
- 		// is opened/expanded
-	 	var videoContainers = details.querySelectorAll(':scope > .bbVideo_container');
+			for(var vc of videoContainers)
+			{
+				// the reason we go through all this trouble to reach the 
+				// video element is because the video player may create a
+				// hidden video element that works as a back buffer for
+				// pre-loading the next video in case this one has a 
+				// playlist. And we do not want that next video to start
+				// pre-loading right away. The video player will trigger
+				// that when the time is right
+				var videoPlayer = vc.childNodes[0].VideoPlayer;			 		
+				videoPlayer.VideoElement.setAttribute('preload', 'metadata');
+			}
 
-	 	for(var vc of videoContainers)
-	 	{
-	 		// the reason we go through all this trouble to reach the 
-	 		// video element is because the video player may create a
-	 		// hidden video element that works as a back buffer for
-	 		// pre-loading the next video in case this one has a 
-	 		// playlist. And we do not want that next video to start
-	 		// pre-loading right away. The video player will trigger
-	 		// that when the time is right
-	 		var videoPlayer = vc.childNodes[0].VideoPlayer;			 		
-	 		videoPlayer.VideoElement.setAttribute('preload', 'metadata');
-	 	}
+			// same for images. Only direct children
+			var images = details.querySelectorAll(':scope > img');
+			
+			for(var image of images)
+			{
+				if(!image.src)
+				{
+					image.setAttribute('src', image.dataset.src);
+				}
+			}
+		}
+		else
+		{
+			var videos = details.querySelectorAll(':scope > .bbVideo_container');
+			
+			for(var video of videos)
+			{
+				// if you simply set 'src' to an empty string you will
+				// receive an error because the element, apparently, will
+				// try to load that empty string
+				video.removeAttribute('src');
+			}
 
-		// same for images. Only direct children
-		var images = details.querySelectorAll(':scope > img');
+			var images = details.querySelectorAll(':scope > img');
+							
+			for(var image of images)
+			{
+				image.dataset.src = image.src;
+				image.removeAttribute('src');
+			}
+		}
+	}
+
+	static #MakeDetailsToHtmlObject(startOpened, defaultSummary)
+	{
+		return {
+			HasContent: true,
+			OpenTag: function(attributes) {		
+				var summaryValue = attributes.length > 0 ?
+					attributes[0].Value : 
+					defaultSummary;
+
+				const s = summaryValue ? 
+					('<summary>' + summaryValue + '</summary>') :
+					'';
+
+				return '<details ' + 
+					(startOpened ? 'open ' : '')  +
+					'ontoggle="BBCode.DetailsOnToggle(this)">' + s;
+			},
+			CloseTag: function(content) {
+				return content + '</details>';
+			}
+		};	
+	}
+
+	static #ToHtml = {
+		//----------------------------------------------------------------------
+		// begin bbcodes already handled by the php backend
+		'b': {
+			HasContent: true,
+			OpenTag: function(attributes) {
+				return '<b>';
+			},
+			CloseTag: function(content) {
+				return content + '</b>';
+			}
+		},
+		'color': {
+			HasContent: true,
+			OpenTag: function(attributes) {
+				const color = attributes.length > 0 ? 
+					attributes[0].Value :
+					'inherit';
+	
+				return '<span style="color:' + color + '">';
+			},
+			CloseTag: function(content) {
+				return content + '</span>';
+			}
+		},
+		'img': {
+			HasContent: true,
+			OpenTag: function(attributes) {
+				return '';
+			},
+			CloseTag: function(content) {
+				if(content)
+				{
+					return '<img class="bbImage" data-src="' + content + '">';
+				}
+				return '';
+			}
+		},
+		// end bbcodes already handled by the php backend
+		//----------------------------------------------------------------------
 		
-	 	for(var image of images)
-	 	{
-	 		if(!image.src)
-	 		{
-	 			image.setAttribute('src', image.dataset.src);
-	 		}
-	 	}
-	 }
-	 else
-	 {
-	 	var videos = details.querySelectorAll(':scope > .bbVideo_container');
-	 	
-	 	for(var video of videos)
-	 	{
-	 		// if you simply set 'src' to an empty string you will
-	 		// receive an error because the element, apparently, will
-	 		// try to load that empty string
-	 		video.removeAttribute('src');
-	 	}
-
-	 	var images = details.querySelectorAll(':scope > img');
-	 				 	
-	 	for(var image of images)
-	 	{
-	 		image.dataset.src = image.src;
-	 		image.removeAttribute('src');
-	 	}
-	 }
- }
-
-
-var parserColors = [ 'gray', 'silver', 'white', 'yellow', 'orange', 'red', 'fuchsia', 'blue', 'green', 'black', '#cd38d9' ];
-
-var parserTags = {
-	'*': {
-		openTag: function(params,content) {
-			return '<li>';
+		'd': BBCode.#MakeDetailsToHtmlObject(false),
+		'img2': {
+			HasContent: true,
+			OpenTag: function(attributes) {
+				return '';
+			},
+			CloseTag: function(content) {
+				if(content)
+				{
+					return '<img class="bbImage" data-src="' + content + '">';
+				}
+				return '';
+			}
 		},
-		closeTag: function(params,content) {
-			return '</li>';
-		}
-	},
-	'b': {
-		openTag: function(params,content) {
-			return '<b>';
+		'quote2': BBCode.#MakeDetailsToHtmlObject(true),
+		'summary': {
+			HasContent: true,
+			OpenTag: function(attributes) {
+				return '<summary>';
+			},
+			CloseTag: function(content) {
+				return content + '</summary>';
+			}
 		},
-		closeTag: function(params,content) {
-			return '</b>';
-		}
-	},
-	'code': {
-		openTag: function(params,content) {
-			return '<code>';
-		},
-		closeTag: function(params,content) {
-			return '</code>';
-		},
-		noParse: true
-	},
-	'color': {
-		openTag: function(params,content) {
-			var colorCode = params ? params : "inherit";
-			BBCodeParser.regExpAllowedColors.lastIndex = 0;
-			BBCodeParser.regExpValidHexColors.lastIndex = 0;
-			if ( !BBCodeParser.regExpAllowedColors.test( colorCode ) ) {
-				if ( !BBCodeParser.regExpValidHexColors.test( colorCode ) ) {
-					colorCode = "inherit";
-				} else {
-					if (colorCode.substr(0,1) !== "#") {
-						colorCode = "#" + colorCode;
+		'spoiler': BBCode.#MakeDetailsToHtmlObject(false, 'spoiler'),
+		'video': {
+			HasContent: true,
+			OpenTag: function(attributes)
+			{
+				return '';
+			},
+			CloseTag: function(content)
+			{
+				var urls = content.split('\n');
+
+				var urlsJson = '[';
+				for(var u of urls)
+				{
+					u = u.replace(/\s+/g, '');
+					if(u.length > 0)
+					{
+						urlsJson += '"' + u + '",';
 					}
 				}
-			}
 
-			return '<span style="color:' + colorCode + '">';
-		},
-		closeTag: function(params,content) {
-			return '</span>';
-		}
-	},
-	'd': {
-		openTag: function(params,content) {						
-			const s = params ? 
-				('<summary>' + params + '</summary>') :
-				'';
-			return '<details ontoggle="DetailsOnToggle(this)">' + s;
-		},
-		closeTag: function(params,content) {
-			return '</details>';
-		}
-	},
-	'i': {
-		openTag: function(params,content) {
-			return '<i>';
-		},
-		closeTag: function(params,content) {
-			return '</i>';
-		}
-	},
-	'img': {
-		openTag: function(params,content) {
-
-			var myUrl = content;
-
-			BBCodeParser.urlPattern.lastIndex = 0;
-			if ( !BBCodeParser.urlPattern.test( myUrl ) ) {
-				myUrl = "";
-			}
-
-			return '<img class="bbImage" height="180" data-src="' + myUrl + '">';
-		},
-		closeTag: function(params,content) {
-			return '';
-		},
-		content: function(params,content) {
-			return '';
-		}
-	},
-	'list': {
-		openTag: function(params,content) {
-			return '<ul>';
-		},
-		closeTag: function(params,content) {
-			return '</ul>';
-		},
-		restrictChildrenTo: ["*", "li"]
-	},
-	'noparse': {
-		openTag: function(params,content) {
-			return '';
-		},
-		closeTag: function(params,content) {
-			return '';
-		},
-		noParse: true
-	},
-	'quote': {
-		openTag: function(params,content) {						
-			const s = params ? params : 'quote';
-			return '<details open><summary>' + s + '</summary>';
-		},
-		closeTag: function(params,content) {
-			return '</details>';
-		}
-	},
-	's': {
-		openTag: function(params,content) {
-			return '<s>';
-		},
-		closeTag: function(params,content) {
-			return '</s>';
-		}
-	},
-	'size': {
-		openTag: function(params,content) {
-			var mySize = parseInt(params.substr(1),10) || 0;
-			if (mySize < 10 || mySize > 20) {
-				mySize = 'inherit';
-			} else {
-				mySize = mySize + 'px';
-			}
-			return '<span style="font-size:' + mySize + '">';
-		},
-		closeTag: function(params,content) {
-			return '</span>';
-		}
-	},
-	'spoiler': {
-		openTag: function(params,content) {						
-			const s = params ? params : 'spoiler';
-			return '<details ontoggle="DetailsOnToggle(this)><summary>' + s + '</summary>';
-		},
-		closeTag: function(params,content) {
-			return '</details>';
-		}
-	},
-	'summary': {
-		openTag: function(params,content) {
-			return '<summary>';
-		},
-		closeTag: function(params,content) {
-			return '</summary>';
-		}
-	},
-	'u': {
-		openTag: function(params,content) {
-			return '<span style="text-decoration:underline">';
-		},
-		closeTag: function(params,content) {
-			return '</span>';
-		}
-	},
-	'url': {
-		openTag: function(params,content) {		
-			var myUrl;
-
-			if (!params) {
-				myUrl = content.replace(/<.*?>/g,"");
-			} else {
-				//myUrl = params.substr(1);
-			}
-
-			BBCodeParser.urlPattern.lastIndex = 0;
-			if ( !BBCodeParser.urlPattern.test( myUrl ) ) {
-				myUrl = "#";
-			}
-
-			return '<a href="' + myUrl + '">';
-		},
-		closeTag: function(params,content) {
-			return '</a>';
-		}
-	},
-	'video': {
-		openTag: function(params,content) {
-
-			var urls = content.split('\n');
-
-			var urlsJson = '[';
-			for(var u of urls)
-			{
-				u = u.replace(/\s+/g, '');
-				if(u.length > 0)
+				if(urlsJson.length > 1)
 				{
-					urlsJson += '"' + u + '",';
+					urlsJson = urlsJson.substring(0, urlsJson.length-1);
 				}
-			}
 
-			if(urlsJson.length > 1)
-			{
-				urlsJson = urlsJson.substr(0, urlsJson.length-1);
-			}
+				urlsJson += ']';		
 
-			urlsJson += ']';		
-
-			return '<video \
+				return '<video \
 controls \
 class="bbVideo" \
 preload="none" \
-data-urls=\'' + urlsJson + '\'>';
-		},
-		closeTag: function(params,content) {
-			return '</video>';
-		},
-		content: function(params,content) {
-			return '';
+data-urls=\'' + urlsJson + '\'></video>';
+			},
 		}
-	},
-};
+	}
 
- 		 
+	static #State = {		
+		Unknown: 0,
+		Content: 1,
+		TagOpen:2,
+		TagName:3,
+		TagAttributeOrAttributeEnd:4,
+		TagAttribute:5,
+		TagAttributesEnd:6,
+		TagClose:7,
 
-var BBCodeParser = (function(parserTags, parserColors) {
-	'use strict';
+		Count:8
+	}
+
+	static #Tag = class
+	{
+		Name = '';
+		Attributes = [];
+		Content = '';
+		
+		constructor(name)
+		{
+			this.Name = name;
+		}
+		
+		ToString()
+		{
+			var attrs = '';
+
+			for(const a of this.Attributes)
+			{
+				attrs += ' ' + a.Name;
+
+				if(a.Value)
+				{
+					attrs += '="' + a.Value + '"';
+				}
+			}
+
+			var s = '[' + this.Name + attrs + ']';
+			if( this.Content.length > 0 )
+			{
+				s += this.Content + '[/' + this.Name + ']';
+			}
+
+			return s;
+		}
+	}
+
+	static #Stack = class
+	{
+		Push(item)
+		{
+			this.#_items.push(item);
+		}
+
+		Top()
+		{
+			return this.#_items[this.#_items.length-1];
+		}
+
+		Pop()
+		{
+			return this.#_items.pop();
+		}
+
+		Clear()
+		{
+			this.#_items.length = 0;
+		}
+
+		Empty()
+		{
+			return this.#_items.length === 0;
+		}
+
+		#_items = [];
+	}
 	
-	var me = {},
-		urlPattern = /^(?:https?|file|c):(?:\/{1,3}|\\{1})[-a-zA-Z0-9:;@#%&()~_?\+=\/\\\.]*$/,
-		emailPattern = /[^\s@]+@[^\s@]+\.[^\s@]+/,
-		fontFacePattern = /^([a-z][a-z0-9_]+|"[a-z][a-z0-9_\s]+")$/i,
-		tagNames = [],
-		tagNamesNoParse = [],
-		regExpAllowedColors,
-		regExpValidHexColors = /^#?[a-fA-F0-9]{6}$/,
-		ii, tagName, len;
+	static #Parser = class
+	{
+		#_data = '';
+		#_p  = '';
+
+		Initialize(text)
+		{
+			this.#_data = text;
+			this.#_p = 0;
+		}
+
+		Peek()
+		{
+			return this.#_data[this.#_p];
+		}
+
+		Read()
+		{
+			const p = this.#_p;
+			++this.#_p;
+			return this.#_data[p];
+		}
+
+		Skip()
+		{
+			++this.#_p;
+		}
+
+		SkipSpaces()
+		{
+			var p = this.#_p;
+			const size = this.#_data.length;
+			for(; p<size; ++p)
+			{
+				// evil... but fast!
+				if(this.#_data.charCodeAt(p) > 32)
+				{
+					break;
+				}
+			}
+
+			this.#_p = p;
+
+			return this.#_p < size;
+		}		
+
+		ReadUntilNotAlphaNum()
+		{	
+			var p = this.#_p;
+
+			const start = p;
+
+			const size = this.#_data.length;
+			for(; p<size; ++p)
+			{
+				const c = this.#_data.charCodeAt(p);
+				
+				const isAlphaNum = 
+					(c >= 96 && c <= 123) || // a-z					
+					(c >= 64 && c <= 91)  || // A-Z
+					(c >= 47 && c <= 58);    // 0-9
+				
+				if(!isAlphaNum)
+				{
+					break;
+				}
+			}
+
+			this.#_p = p;
+
+			return this.#_data.substring(start, p);
+		}
 		
-	// create tag list and lookup fields
-	for (tagName in parserTags) {
-		if (!parserTags.hasOwnProperty(tagName))
-			continue;
+		ReadQuotedText()
+		{
+			this.Skip();
+
+			var p = this.#_p;
+
+			const start = p;
+			const size = this.#_data.length;
+			var escaped = false;
+			for(; p<size; ++p)
+			{
+				if(!escaped)
+				{
+					const c = this.#_data[p];
+					
+					if(c === '"')
+					{
+						break;						
+					}
+					else if(c === '\\')
+					{
+						escaped = true;
+					}
+				}
+				else
+				{
+					escaped = false;
+				}
+			}
+
+			this.#_p = p + 1;
+
+			return this.#_data.substring(start, p);
+		}		
+
+		ReadUntil(delimiter)
+		{
+			const start = this.#_p;
+			
+			var p = this.#_data.indexOf(delimiter, start);
+			if(p < 0)
+			{
+				p = this.#_data.length;
+			}
+
+			this.#_p = p;
+
+			return this.#_data.substring(start, p);
+		}
+
+		Empty()
+		{
+			return this.#_p >= this.#_data.length;
+		}
+	}
+
+	#_parser = new BBCode.#Parser();
+	#_html = '';
+	#_tagStack = new BBCode.#Stack();
+	#_state = BBCode.#State.Unknown;
+
+	#AppendHtml(html)
+	{
+		if(html)
+		{
+			if(!this.#_tagStack.Empty())
+			{
+				this.#_tagStack.Top().Content += html;
+			}
+			else
+			{
+				this.#_html += html;
+			}
+		}
+	}
+
+	#OnUnknown()
+	{
+		if(this.#_parser.Peek() === '[')
+		{
+			this.#_state = BBCode.#State.TagOpen;
+		}
+		else
+		{
+			this.#_state = BBCode.#State.Content;
+		}
+
+		return true;
+	}
+
+	#OnTagOpen()
+	{
+		this.#_parser.Skip();
+		const c = this.#_parser.Peek();
+		if(c >= 'a' && c <= 'z')			
+		{
+			this.#_state = BBCode.#State.TagName;
+		}
+		else if(c == '/')
+		{
+			this.#_state = BBCode.#State.TagClose;
+		}
+		else
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	#OnTagName()
+	{
+		const name = this.#_parser.ReadUntilNotAlphaNum();
+		this.#_tagStack.Push( new BBCode.#Tag(name) );
+
+		this.#_state = BBCode.#State.TagAttributeOrAttributeEnd;
 		
-		if (tagName === '*') {
-			tagNames.push('\\' + tagName);
-		} else {
-			tagNames.push(tagName);
-			if ( parserTags[tagName].noParse ) {
-				tagNamesNoParse.push(tagName);
+		return true;
+	}
+
+	#OnTagAttributeOrAttributeEnd()
+	{
+		this.#_parser.SkipSpaces();
+		if(this.#_parser.Peek() === ']')
+		{
+			this.#_state = BBCode.#State.TagAttributesEnd;
+		}
+		else
+		{
+			this.#_state = BBCode.#State.TagAttribute;
+		}
+
+		return true;
+	}
+
+	#OnTagAttribute()
+	{
+		const name = this.#_parser.ReadUntilNotAlphaNum();		
+		var value = null;
+		if(this.#_parser.Peek() === '=')
+		{
+			this.#_parser.Skip();
+			if(this.#_parser.Peek() === '"')
+			{
+				value = this.#_parser.ReadQuotedText();
+			}
+			else
+			{
+				value = this.#_parser.ReadUntilNotAlphaNum();
+			}			
+		}
+
+		if(name || value)
+		{
+			this.#_tagStack.Top().Attributes.push( 
+				{
+					Name: name,
+					Value: value
+				} );
+
+			this.#_state = BBCode.#State.TagAttributeOrAttributeEnd;
+
+			return true;
+		}
+
+		// the user probably forgot to put the attribute value inside quotes
+		return false;
+	}
+
+	#OnTagAttributesEnd()
+	{
+		const tag = this.#_tagStack.Top();
+		
+		const toHtml = BBCode.#ToHtml[ tag.Name ];
+
+		var hasContent = false;
+
+		if(toHtml)
+		{ 			
+			this.#AppendHtml( toHtml.OpenTag(tag.Attributes) );
+			hasContent = toHtml.HasContent;
+		}
+		else
+		{
+			this.#AppendHtml( tag.ToString() );
+		}
+		
+		this.#_parser.Skip();
+
+		if(!hasContent)
+		{
+			this.#_tagStack.Pop();
+		}
+
+		this.#_state = BBCode.#State.Unknown;
+
+		return true;
+	}
+
+	#OnContent()
+	{ 
+		const value = this.#_parser.ReadUntil('[');
+		
+		this.#AppendHtml(value);
+
+		this.#_state = BBCode.#State.Unknown;
+
+		return true;
+	}
+
+	#OnTagClose()
+	{
+		this.#_parser.Skip();
+		const name = this.#_parser.ReadUntilNotAlphaNum();
+		
+		if(this.#_parser.Read() !== ']' ||  this.#_tagStack.Empty())
+		{
+			return false;
+		}
+		
+		const tag = this.#_tagStack.Pop();
+		if(tag.Name !== name)
+		{
+			return false;
+		}
+
+		const toHtml = BBCode.#ToHtml[ tag.Name ];
+		var html;
+		if(toHtml)
+		{
+			html = toHtml.CloseTag(tag.Content);
+		}
+		else
+		{
+			html = '[/' + name + ']';
+		}
+
+		if(!this.#_tagStack.Empty())
+		{
+			this.#_tagStack.Top().Content += html;
+		}
+		else
+		{
+			this.#_html += html;
+		}
+
+		this.#_state = BBCode.#State.Unknown;
+
+		return true;
+	}
+
+	Parse(html)
+	{
+		this.#_parser.Initialize(html);
+		this.#_html = '';
+		this.#_tagStack.Clear();
+		this.#_state = BBCode.#State.Unknown;
+			
+		for(var ok=true; 
+			ok === true   &&   this.#_parser.Empty() == false; )
+		{
+			switch(this.#_state)
+			{
+				case BBCode.#State.Unknown:
+					ok = this.#OnUnknown();
+					break;
+				case BBCode.#State.Content:
+					ok = this.#OnContent();
+					break;
+				case BBCode.#State.TagOpen:
+					ok = this.#OnTagOpen();
+					break;
+				case BBCode.#State.TagName:
+					ok = this.#OnTagName();
+					break;
+				case BBCode.#State.TagAttributeOrAttributeEnd:
+					ok = this.#OnTagAttributeOrAttributeEnd();
+					break;
+				case BBCode.#State.TagAttribute:
+					ok = this.#OnTagAttribute();
+					break;
+				case BBCode.#State.TagAttributesEnd:
+					ok = this.#OnTagAttributesEnd();
+					break;
+				case BBCode.#State.TagClose:
+					ok = this.#OnTagClose();
+					break;
 			}
 		}
 
-		parserTags[tagName].validChildLookup = {};
-		parserTags[tagName].validParentLookup = {};
-		parserTags[tagName].restrictParentsTo = parserTags[tagName].restrictParentsTo || [];
-		parserTags[tagName].restrictChildrenTo = parserTags[tagName].restrictChildrenTo || [];
-
-		len = parserTags[tagName].restrictChildrenTo.length;
-		for (ii = 0; ii < len; ii++) {
-			parserTags[tagName].validChildLookup[ parserTags[tagName].restrictChildrenTo[ii] ] = true;
-		}
-		len = parserTags[tagName].restrictParentsTo.length;
-		for (ii = 0; ii < len; ii++) {
-			parserTags[tagName].validParentLookup[ parserTags[tagName].restrictParentsTo[ii] ] = true;
-		}
+		return this.#_html;
 	}
-	
-	regExpAllowedColors = new RegExp('^(?:' + parserColors.join('|') + ')$');
-	
-	/* 
-	 * Create a regular expression that captures the innermost instance of a tag in an array of tags
-	 * The returned RegExp captures the following in order:
-	 * 1) the tag from the array that was matched
-	 * 2) all (optional) parameters included in the opening tag
-	 * 3) the contents surrounded by the tag
-	 * 
-	 * @param {type} tagsArray - the array of tags to capture
-	 * @returns {RegExp}
-	 */
-	function createInnermostTagRegExp(tagsArray) {
-		var openingTag = '\\[(' + tagsArray.join('|') + ')\\b(?:[ =]([\\w"#\\-\\:\\/= ]*?))?\\]',
-			notContainingOpeningTag = '((?:(?=([^\\[]+))\\4|\\[(?!\\1\\b(?:[ =](?:[\\w"#\\-\\:\\/= ]*?))?\\]))*?)',
-			closingTag = '\\[\\/\\1\\]';
-			
-		return new RegExp( openingTag + notContainingOpeningTag + closingTag, 'i');
-	}
-	
-	/*
-	 * Escape the contents of a tag and mark the tag with a null unicode character.
-	 * To be used in a loop with a regular expression that captures tags.
-	 * Marking the tag prevents it from being matched again.
-	 * 
-	 * @param {type} matchStr - the full match, including the opening and closing tags
-	 * @param {type} tagName - the tag that was matched
-	 * @param {type} tagParams - parameters passed to the tag
-	 * @param {type} tagContents - everything between the opening and closing tags
-	 * @returns {String} - the full match with the tag contents escaped and the tag marked with \u0000
-	 */
-	function escapeInnerTags(matchStr, tagName, tagParams, tagContents) {
-		tagParams = tagParams || "";
-		tagContents = tagContents || "";
-		tagContents = tagContents.replace(/\[/g, "&#91;").replace(/\]/g, "&#93;");
-		return "[\u0000" + tagName + tagParams + "]" + tagContents + "[/\u0000" + tagName + "]";
-	}
-	
-	/* 
-	 * Escape all BBCodes that are inside the given tags.
-	 * 
-	 * @param {string} text - the text to search through
-	 * @param {string[]} tags - the tags to search for
-	 * @returns {string} - the full text with the required code escaped
-	 */
-	function escapeBBCodesInsideTags(text, tags) {
-		var innerMostRegExp;
-		if (tags.length === 0 || text.length < 7)
-			return text;
-		innerMostRegExp = createInnermostTagRegExp(tags);
-		while (
-			text !== (text = text.replace(innerMostRegExp, escapeInnerTags))
-		);
-		return text.replace(/\u0000/g,'');
-	}
-	
-	/*
-	 * Process a tag and its contents according to the rules provided in parserTags.
-	 * 
-	 * @param {type} matchStr - the full match, including the opening and closing tags
-	 * @param {type} tagName - the tag that was matched
-	 * @param {type} tagParams - parameters passed to the tag
-	 * @param {type} tagContents - everything between the opening and closing tags
-	 * @returns {string} - the fully processed tag and its contents
-	 */
-	function replaceTagsAndContent(matchStr, tagName, tagParams, tagContents) {
-		tagName = tagName.toLowerCase();
-		tagParams = tagParams || "";
-		tagContents = tagContents || "";
-		return parserTags[tagName].openTag(tagParams, tagContents) + (parserTags[tagName].content ? parserTags[tagName].content(tagParams, tagContents) : tagContents) + parserTags[tagName].closeTag(tagParams, tagContents);
-	}
-	
-	function processTags(text, tagNames) {
-		var innerMostRegExp;
-		
-		if (tagNames.length === 0 || text.length < 7)
-			return text;
-		
-		innerMostRegExp = createInnermostTagRegExp(tagNames);
-		
-		while (
-			text !== (text = text.replace(innerMostRegExp, replaceTagsAndContent))
-		);
-		
-		return text;
-	}
-	
-	/*
-	 * Public Methods and Properties
-	 */
-	me.process = function(text, config) {
-		text = escapeBBCodesInsideTags(text, tagNamesNoParse);
-		
-		return processTags(text, tagNames);
-	};
-	
-	me.allowedTags = tagNames;
-	me.urlPattern = urlPattern;
-	me.emailPattern = emailPattern;
-	me.regExpAllowedColors = regExpAllowedColors;
-	me.regExpValidHexColors = regExpValidHexColors;
-		
-	return me;
-})(parserTags, parserColors);
-
-		
+}
 
 
 // MMA-T specific stuff
@@ -796,11 +992,13 @@ var BBCodeParser = (function(parserTags, parserColors) {
 // parse bbcodes in tags containing the "comment" class when the page is loaded
 window.addEventListener("DOMContentLoaded", function(event) 
 {
+	var bbcode = new BBCode();
+
 	var comments = document.querySelectorAll('.comment');
 
 	for(var comment of comments)
-	{
-	  	comment.innerHTML = BBCodeParser.process( comment.innerHTML );
+	{	  	
+		comment.innerHTML = bbcode.Parse( comment.innerHTML );
 
 		// initialize videos generated by bbcode
 	  	var videos = comment.querySelectorAll('.bbVideo');
@@ -814,7 +1012,7 @@ window.addEventListener("DOMContentLoaded", function(event)
 	 	}
 
 		// videos, by default, use preload=none in order to avoid stupid
-		// browsers doing stupid things (look at you Firefox). When the 
+		// browsers doing stupid things (I'm looking at you Firefox). When the 
 		// is inside a <details> tag, we change preload to 'metadata' when
 		// the tag is opened.
 		// 
@@ -834,8 +1032,7 @@ window.addEventListener("DOMContentLoaded", function(event)
 	 	for(var image of imagesNotInsideDetails)
 	 	{
 	 		image.setAttribute('src', image.dataset.src);
-	 	}
+	 	}		
  	}
 });
-
 
