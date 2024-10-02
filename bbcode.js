@@ -360,6 +360,16 @@ class BBCode
 {
 	static DetailsOnToggle(details)
 	{
+		const videoSelectors = [
+			':scope > p > .bbVideo_container',
+			':scope > .bbVideo_container'
+			];
+
+		const imgSelectors = [
+			':scope > p > img',
+			':scope > img'
+			];
+
 		// pre-load videos and images when the details tag is opened.
 		// Unload them when it is closed
 		if(details.open)
@@ -368,50 +378,62 @@ class BBCode
 			// ignororing the ones that might be inside inner details tag
 			// because those should only be loaded when their parent tag
 			// is opened/expanded
-			var videoContainers = details.querySelectorAll(':scope > p > .bbVideo_container');
-
-			for(var vc of videoContainers)
+			for(const selector of videoSelectors)
 			{
-				// the reason we go through all this trouble to reach the 
-				// video element is because the video player may create a
-				// hidden video element that works as a back buffer for
-				// pre-loading the next video in case this one has a 
-				// playlist. And we do not want that next video to start
-				// pre-loading right away. The video player will trigger
-				// that when the time is right
-				var videoPlayer = vc.childNodes[0].VideoPlayer;			 		
-				videoPlayer.VideoElement.setAttribute('preload', 'metadata');
+				var videoContainers = details.querySelectorAll(selector);
+
+				for(var vc of videoContainers)
+				{
+					// the reason we go through all this trouble to reach the 
+					// video element is because the video player may create a
+					// hidden video element that works as a back buffer for
+					// pre-loading the next video in case this one has a 
+					// playlist. And we do not want that next video to start
+					// pre-loading right away. The video player will trigger
+					// that when the time is right
+					var videoPlayer = vc.childNodes[0].VideoPlayer;			 		
+					videoPlayer.VideoElement.setAttribute('preload', 'metadata');
+				}
 			}
 
 			// same for images. Only direct children
-			var images = details.querySelectorAll(':scope > p > img');
-			
-			for(var image of images)
+			for(const selector of imgSelectors)
 			{
-				if(!image.src)
+				var images = details.querySelectorAll(selector);
+				
+				for(var image of images)
 				{
-					image.setAttribute('src', image.dataset.src);
+					if(!image.src)
+					{
+						image.setAttribute('src', image.dataset.src);
+					}
 				}
 			}
 		}
 		else
 		{
-			var videos = details.querySelectorAll(':scope > p > .bbVideo_container');
-			
-			for(var video of videos)
+			for(const selector of videoSelectors)
 			{
-				// if you simply set 'src' to an empty string you will
-				// receive an error because the element, apparently, will
-				// try to load that empty string
-				video.removeAttribute('src');
+				var videos = details.querySelectorAll(selector);
+				
+				for(var video of videos)
+				{
+					// if you simply set 'src' to an empty string you will
+					// receive an error because the element, apparently, will
+					// try to load that empty string
+					video.removeAttribute('src');
+				}
 			}
 
-			var images = details.querySelectorAll(':scope > p > img');
-							
-			for(var image of images)
+			for(const selector of imgSelectors)
 			{
-				image.dataset.src = image.src;
-				image.removeAttribute('src');
+				var images = details.querySelectorAll(selector);
+								
+				for(var image of images)
+				{
+					image.dataset.src = image.src;
+					image.removeAttribute('src');
+				}
 			}
 		}
 	}
