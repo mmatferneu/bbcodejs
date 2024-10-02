@@ -1002,7 +1002,9 @@ window.addEventListener("DOMContentLoaded", function(event)
 
 		// MMA-T php scripts will try to replace urls inside [video] tags by
 		// links. This should not be necessary once (and if) the scripts are 
-		// updated to understand video tags
+		// updated to understand video tags. It will also insert <br /> tags
+		// on the line breaks. We remove them too
+		html = html.replace(/([video][^<])*<br *\/*>([^\[]*\[\/video])/gm, '$1$2');
 		html = html.replace(/<a [^\[]*\[\/video]">([^<]*)<\/a>/g, '$1');
 
 		comment.innerHTML = bbcode.Parse( html );
