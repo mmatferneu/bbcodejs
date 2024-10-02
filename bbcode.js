@@ -368,7 +368,7 @@ class BBCode
 			// ignororing the ones that might be inside inner details tag
 			// because those should only be loaded when their parent tag
 			// is opened/expanded
-			var videoContainers = details.querySelectorAll(':scope > .bbVideo_container');
+			var videoContainers = details.querySelectorAll(':scope > p > .bbVideo_container');
 
 			for(var vc of videoContainers)
 			{
@@ -384,7 +384,7 @@ class BBCode
 			}
 
 			// same for images. Only direct children
-			var images = details.querySelectorAll(':scope > img');
+			var images = details.querySelectorAll(':scope > p > img');
 			
 			for(var image of images)
 			{
@@ -396,7 +396,7 @@ class BBCode
 		}
 		else
 		{
-			var videos = details.querySelectorAll(':scope > .bbVideo_container');
+			var videos = details.querySelectorAll(':scope > p > .bbVideo_container');
 			
 			for(var video of videos)
 			{
@@ -406,7 +406,7 @@ class BBCode
 				video.removeAttribute('src');
 			}
 
-			var images = details.querySelectorAll(':scope > img');
+			var images = details.querySelectorAll(':scope > p > img');
 							
 			for(var image of images)
 			{
