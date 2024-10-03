@@ -459,13 +459,14 @@ class BBCode
 					('<summary>' + summaryValue + '</summary>') :
 					'';
 
-				if(Object.keys(attributes).includes('open'))
+				var attributeOpen  = ' ';
+				if(startOpened || Object.keys(attributes).includes('open'))
 				{
-					startOpened = true;
+					attributeOpen = 'open ';
 				}
 
 				return '<details ' + 
-					(startOpened ? 'open ' : '')  +
+					attributeOpen +
 					'ontoggle="BBCode.DetailsOnToggle(this)">' + s;
 			},
 			CloseTag: function(content) {
