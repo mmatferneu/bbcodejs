@@ -360,7 +360,7 @@ class BBCode
 {
 	static DetailsOnToggle(details)
 	{
-		// MMA-T hack warning! The
+		// MMA-T hack: The
 		// :scope > p > xxxxxx
 		// selectors should not be needed and are only here because the php code
 		// will put stuff inside <p> tags
@@ -1034,12 +1034,23 @@ window.addEventListener("DOMContentLoaded", function(event)
 	{	  	
 		var html = comment.innerHTML;
 
-		// MMA-T php scripts will try to replace urls inside [video] tags by
+		// MMA-T hack:
+		// the php scripts will try to replace urls inside [video] tags by
 		// links. This should not be necessary once (and if) the scripts are 
 		// updated to understand video tags. It will also insert <br /> tags
 		// on the line breaks. We remove them too
-		html = html.replace(/([video][^<])*<br *\/*>([^\[]*\[\/video])/gm, '$1$2');
-		html = html.replace(/<a [^\[]*\[\/video]">([^<]*)<\/a>/g, '$1');
+		for(;;)
+		{
+			var oldHtml = html;
+			html = html.replace(/(\[video\][^<])*<[^>]*>([^\[]*\[\/video])/gm, '$1$2');
+			if(html === oldHtml)
+			{
+				// the php script is likely to put the closing [/video] tag 
+				// inside and <a>, so the ending </a> is right after it.
+				html = html.replace(/([\/video])<\/a>/gm, '$1');
+				break;
+			}
+		}
 
 		comment.innerHTML = bbcode.Parse( html );
 
