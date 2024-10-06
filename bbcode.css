@@ -35,7 +35,7 @@ details[open] > summary {
 
 
 .bbVideo_container {
-    max-width: 25%;
+    max-width: 50%;
     box-sizing: border-box;
     padding-top: 4px;
     /* hack to remove little gaps between the elements due to whitespaces 
