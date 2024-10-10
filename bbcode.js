@@ -358,6 +358,20 @@ class VideoPlayer
 
 class BBCode
 {
+	static #IsInsideClosedDetails(e)
+	{
+		for(e=e.parentElement; e!==null; e=e.parentElement)
+		{
+			if(e.tagName === 'DETAILS'
+			&& e.open !== true)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+	
 	static DetailsOnToggle(details)
 	{
 		// MMA-T hack: The
@@ -374,10 +388,41 @@ class BBCode
 			':scope > img'
 			];
 
+		const detailsSelectors = [
+			':scope > p > details',
+			':scope > details'
+			];
+
 		// pre-load videos and images when the details tag is opened.
 		// Unload them when it is closed
 		if(details.open)
 		{
+			// only execute this if the element is visible. A situation where
+			// we might receive an "open" even in a invisble details is when a
+			// details tag with the "open" attribute is put inside another 
+			// details tag that is closed. 
+			if(BBCode.#IsInsideClosedDetails(details))
+			{
+				return;
+			}
+			else
+			{
+				// Note that, since we are abort the execution here for the 
+				// reason mentioned above, we have to force it on children
+				// details whenever the parent is opened
+				for(const selector of detailsSelectors)
+				{
+					var childDetails = details.querySelectorAll(selector);
+					for(var d of childDetails)
+					{
+						if(d.open)
+						{
+							BBCode.DetailsOnToggle(d);
+						}
+					}
+				}
+			}
+
 			// get only videos that are direct children of this details tag.
 			// ignororing the ones that might be inside inner details tag
 			// because those should only be loaded when their parent tag
@@ -418,14 +463,19 @@ class BBCode
 		{
 			for(const selector of videoSelectors)
 			{
-				var videos = details.querySelectorAll(selector);
-				
-				for(var video of videos)
+				var videoContainers = details.querySelectorAll(selector);
+
+				for(var vc of videoContainers)
 				{
-					// if you simply set 'src' to an empty string you will
-					// receive an error because the element, apparently, will
-					// try to load that empty string
-					video.removeAttribute('src');
+					// the reason we go through all this trouble to reach the 
+					// video element is because the video player may create a
+					// hidden video element that works as a back buffer for
+					// pre-loading the next video in case this one has a 
+					// playlist. And we do not want that next video to start
+					// pre-loading right away. The video player will trigger
+					// that when the time is right
+					var element = vc.childNodes[0].VideoPlayer.VideoElement;
+					element.removeAttribute('src');
 				}
 			}
 
@@ -1029,7 +1079,6 @@ window.addEventListener("DOMContentLoaded", function(event)
 	var bbcode = new BBCode();
 
 	var comments = document.querySelectorAll('.comment');
-
 	for(var comment of comments)
 	{	  	
 		var html = comment.innerHTML;
@@ -1074,9 +1123,17 @@ window.addEventListener("DOMContentLoaded", function(event)
 		// the preload to metadata because we assume there will only be
 		// a few of them in a page
 	 	var videosNotInsideDetails = comment.querySelectorAll('.bbVideo:not(details .bbVideo)');
-	 	for(var video of videosNotInsideDetails)
-	 	{
-	 		video.setAttribute('preload', 'metadata');
+	 	for(var vc of videosNotInsideDetails)
+	 	{			
+			// the reason we go through all this trouble to reach the 
+			// video element is because the video player may create a
+			// hidden video element that works as a back buffer for
+			// pre-loading the next video in case this one has a 
+			// playlist. And we do not want that next video to start
+			// pre-loading right away. The video player will trigger
+			// that when the time is right
+			var videoPlayer = vc.childNodes[0].VideoPlayer;			 		
+			videoPlayer.VideoElement.setAttribute('preload', 'metadata');
 	 	}
 
 	 	// same for images. When the bbcode is parsed, the src is left empty
