@@ -142,6 +142,31 @@ class VideoPlayer
 			});
 	}
 
+	static Reset(videoPlayer)
+	{
+		if(videoPlayer.Urls.length > 0)
+		{
+			videoPlayer.VideoElement.src = videoPlayer.Urls[0];
+			videoPlayer.VideoElement.setAttribute('preload', 'metadata');
+
+			if(videoPlayer.Urls.length > 1)
+			{
+				VideoPlayer.#UpdateStatus(videoPlayer);
+			}			
+		}		
+	}
+
+	static Unload(videoPlayer)
+	{
+		// the reason for both removeAttribute() and setting src to empty 
+		// directly is because browsers do not seem to stop trying to load a
+		// video if I just call removeAttribute()
+		videoPlayer.VideoElement.src = '';
+		videoPlayer.VideoElement.removeAttribute('src');
+		videoPlayer.Backbuffer.src = '';
+		videoPlayer.Backbuffer.removeAttribute('src');		
+	}
+	
 	static #CreateElement(tagName, className, text = null)
 	{
 		var e = document.createElement(tagName);
@@ -371,34 +396,126 @@ class BBCode
 
 		return false;
 	}
-	
-	static DetailsOnToggle(details)
+
+
+	// load media tags that are direct children of this details tag
+	static #LoadDirectChildMedia(details)
 	{
 		// MMA-T hack: The
 		// :scope > p > xxxxxx
 		// selectors should not be needed and are only here because the php code
 		// will put stuff inside <p> tags
-		const videoSelectors = [
-			':scope > p > .bbVideo_container',
-			':scope > .bbVideo_container'
-			];
+		const selectorDirectChildVideo = [
+				':scope > p > .bbVideo_container',
+				':scope > .bbVideo_container'
+				];
 
-		const imgSelectors = [
-			':scope > p > img',
-			':scope > img'
-			];
+		const selectorDirectChildImage = [
+				':scope > p > img',
+				':scope > img'
+				];
+		
+		// get only videos that are direct children of this details tag, 
+		// ignororing the ones that might be inside inner details tag because 
+		// those should only be loaded when their parent tag is opened/expanded
+		for(const selector of selectorDirectChildVideo)
+		{
+			var videoContainers = details.querySelectorAll(selector);
 
-		const detailsSelectors = [
+			for(var vc of videoContainers)
+			{
+				// the reason we go through all this trouble to reach the video 
+				// element is because the video player may create a hidden video
+				// element that works as a back buffer for pre-loading the next 
+				// video in case this one has a playlist. And we do not want 
+				// that next video to start pre-loading right away. The video 
+				// player will trigger that when the time is right
+				var videoPlayer = vc.childNodes[0].VideoPlayer;
+				VideoPlayer.Reset(videoPlayer);					
+			}
+		}
+
+		// same for images. Only direct children
+		for(const selector of selectorDirectChildImage)
+		{
+			var images = details.querySelectorAll(selector);
+			
+			for(var image of images)
+			{
+				if(!image.src)
+				{
+					image.setAttribute('src', image.dataset.src);
+				}
+			}
+		}
+	}
+
+	// unload all media tags that are children of this details tag. 
+	//
+	// NOTE: unlike #LoadDirectChildMedia(), here we unload everything, not only
+	// direct children.
+	static #UnloadChildMedia(details)
+	{
+		const selectorChildVideo = ':scope .bbVideo_container';
+
+		const selectorChildImage = ':scope img';
+		
+		var videoContainers = details.querySelectorAll(selectorChildVideo);
+
+		for(var vc of videoContainers)
+		{
+			// the reason we go through all this trouble to reach the 
+			// video element is because the video player may create a
+			// hidden video element that works as a back buffer for
+			// pre-loading the next video in case this one has a 
+			// playlist. And we do not want that next video to start
+			// pre-loading right away. The video player will trigger
+			// that when the time is right
+			var videoPlayer = vc.childNodes[0].VideoPlayer;
+			VideoPlayer.Unload(videoPlayer);
+		}		
+
+		var images = details.querySelectorAll(selectorChildImage);
+						
+		for(var image of images)
+		{
+			if(!image.dataset.src)
+			{
+				image.dataset.src = image.src;
+			}
+
+			image.removeAttribute('src');
+		}
+	}
+	
+	static DetailsOnToggle(details)
+	{
+		// MMAT-T hack: The
+		// :scope > p > xxxxxx
+		// selectors should not be needed and are only here because the php code
+		// will put stuff inside <p> tags
+		/*const detailsSelectors = [
 			':scope > p > details',
 			':scope > details'
 			];
+		*/
+		const detailsSelectors = [
+			':scope details'
+			];
 
-		// pre-load videos and images when the details tag is opened.
-		// Unload them when it is closed
+		// pre-load videos and images when the details tag is opened. Unload 
+		// them when it is closed.
+		//
+		// When loading, only load stuff that are direct children of this 
+		// details tag. Images and videos inside child details tag will be 
+		// loaded only when those child details tags are opened.
+		//
+		// On the other hand, when unloading, we unload everything, since there
+		// is no reason too keep images and videos that will become invisible.
 		if(details.open)
 		{
 			// only execute this if the element is visible. A situation where
-			// we might receive an "open" even in a invisble details is when a
+			// we might receive an "open" event in a invisble details is when a
 			// details tag with the "open" attribute is put inside another 
 			// details tag that is closed. 
 			if(BBCode.#IsInsideClosedDetails(details))
@@ -407,88 +524,33 @@ class BBCode
 			}
 			else
 			{
-				// Note that, since we are abort the execution here for the 
-				// reason mentioned above, we have to force it on children
-				// details whenever the parent is opened
+				// load all images and videos that are direct children of this 
+				// tag
+				BBCode.#LoadDirectChildMedia(details);
+
+				// and now that their parent details tag is opened and visible,
+				// load images and videos from the children details that happen
+				// to be open too
 				for(const selector of detailsSelectors)
 				{
 					var childDetails = details.querySelectorAll(selector);
 					for(var d of childDetails)
 					{
-						if(d.open)
+						// load media of any child details tag that is opened
+						// and not inside a closed details
+						if(d.open === true
+						&& BBCode.#IsInsideClosedDetails(d) === false
+						)
 						{
-							BBCode.DetailsOnToggle(d);
+							BBCode.#LoadDirectChildMedia(d);
 						}
-					}
-				}
-			}
-
-			// get only videos that are direct children of this details tag.
-			// ignororing the ones that might be inside inner details tag
-			// because those should only be loaded when their parent tag
-			// is opened/expanded
-			for(const selector of videoSelectors)
-			{
-				var videoContainers = details.querySelectorAll(selector);
-
-				for(var vc of videoContainers)
-				{
-					// the reason we go through all this trouble to reach the 
-					// video element is because the video player may create a
-					// hidden video element that works as a back buffer for
-					// pre-loading the next video in case this one has a 
-					// playlist. And we do not want that next video to start
-					// pre-loading right away. The video player will trigger
-					// that when the time is right
-					var videoPlayer = vc.childNodes[0].VideoPlayer;			 		
-					videoPlayer.VideoElement.setAttribute('preload', 'metadata');
-				}
-			}
-
-			// same for images. Only direct children
-			for(const selector of imgSelectors)
-			{
-				var images = details.querySelectorAll(selector);
-				
-				for(var image of images)
-				{
-					if(!image.src)
-					{
-						image.setAttribute('src', image.dataset.src);
 					}
 				}
 			}
 		}
 		else
 		{
-			for(const selector of videoSelectors)
-			{
-				var videoContainers = details.querySelectorAll(selector);
-
-				for(var vc of videoContainers)
-				{
-					// the reason we go through all this trouble to reach the 
-					// video element is because the video player may create a
-					// hidden video element that works as a back buffer for
-					// pre-loading the next video in case this one has a 
-					// playlist. And we do not want that next video to start
-					// pre-loading right away. The video player will trigger
-					// that when the time is right
-					var element = vc.childNodes[0].VideoPlayer.VideoElement;
-					element.removeAttribute('src');
-				}
-			}
-
-			for(const selector of imgSelectors)
-			{
-				var images = details.querySelectorAll(selector);
-								
-				for(var image of images)
-				{
-					image.dataset.src = image.src;
-					image.removeAttribute('src');
-				}
-			}
+			BBCode.#UnloadChildMedia(details);
 		}
 	}
 
@@ -1113,6 +1175,9 @@ window.addEventListener("DOMContentLoaded", function(event)
 				JSON.parse(video.dataset.urls), 
 				false);		 	
 	 	}
+
+		// todo: the following code will not load images and videos if someone
+		// puts them "opened" details tag outside any other details tag.
 
 		// videos, by default, use preload=none in order to avoid stupid
 		// browsers doing stupid things (I'm looking at you Firefox). When the 
